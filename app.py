@@ -73,7 +73,6 @@ div[data-testid="stMetric"] {
 </style>
 """)
 
-
 # =========================================================
 # EXCEPTIONS PERSONNALISÉES
 # =========================================================
@@ -89,7 +88,6 @@ class ValidationException(BibliothequeException):
 class MetierException(BibliothequeException):
     """Exception levée en cas de violation d'une règle de gestion"""
     pass
-
 
 # =========================================================
 # POO : MODÈLES DE DONNÉES & ENCAPSULATION
@@ -140,7 +138,6 @@ class Utilisateur:
             raise ValidationException("Le mot de passe doit contenir au moins 6 caractères.")
         return hashlib.sha256(mot_de_passe.encode()).hexdigest()
 
-
 class Categorie:
     """Classe représentant une catégorie de livres"""
     def __init__(self, id_cat, nom):
@@ -158,7 +155,6 @@ class Categorie:
         if not valeur or not valeur.strip():
             raise ValidationException("Le nom de la catégorie est obligatoire.")
         self._nom = valeur.strip()
-
 
 class Livre:
     """Classe représentant un livre"""
@@ -198,8 +194,6 @@ class Livre:
         if val is not None and (val < 1000 or val > 2100):
             raise ValidationException("Année invalide.")
         self._annee = val
-
-
 # =========================================================
 # GESTIONNAIRE DE BASE DE DONNÉES ET SERVICES
 # =========================================================
@@ -260,7 +254,6 @@ class DatabaseManager:
 
 DatabaseManager.init_db()
 
-
 class BibliothequeService:
     DUREE_EMPRUNT = 14
     AMENDE_PAR_JOUR = 500
@@ -275,7 +268,6 @@ class BibliothequeService:
     def a_droit(cls, role, fonctionnalite):
         return fonctionnalite in cls.ROLES.get(role, [])
 
-    # --- Authentification ---
     @staticmethod
     def connecter_utilisateur(email, mot_de_passe):
         if not email or not mot_de_passe:
@@ -293,7 +285,6 @@ class BibliothequeService:
             return Utilisateur(*res)
         return None
 
-    # --- Catégories ---
     @staticmethod
     def obtenir_categories():
         conn = DatabaseManager.connecter()
@@ -337,7 +328,6 @@ class BibliothequeService:
         conn.commit()
         conn.close()
 
-    # --- Livres ---
     @staticmethod
     def obtenir_livres(recherche=""):
         conn = DatabaseManager.connecter()
@@ -398,7 +388,6 @@ class BibliothequeService:
         conn.commit()
         conn.close()
 
-    # --- Utilisateurs & Emprunteurs ---
     @staticmethod
     def obtenir_utilisateurs():
         conn = DatabaseManager.connecter()
@@ -470,7 +459,6 @@ class BibliothequeService:
         conn.commit()
         conn.close()
 
-    # --- Emprunts ---
     @staticmethod
     def emprunter_livre(id_livre, id_utilisateur):
         conn = DatabaseManager.connecter()
@@ -492,34 +480,51 @@ class BibliothequeService:
         conn.close()
 
     @staticmethod
-    def obtenir_emprunts():
+    def obtenir_emprunts(id_utilisateur=None):
         conn = DatabaseManager.connecter()
         cur = conn.cursor()
-        cur.execute("""
-            SELECT e.id, l.titre, u.nom, u.postnom, u.prenom, e.date_emprunt, e.date_retour, e.amende
-            FROM emprunts e
-            JOIN livres l ON e.id_livre = l.id
-            JOIN utilisateurs u ON e.id_utilisateur = u.id
-            ORDER BY e.id DESC
-        """)
+        if id_utilisateur:
+            cur.execute("""
+                SELECT e.id, l.titre, u.nom, u.postnom, u.prenom, e.date_emprunt, e.date_retour, e.amende, e.id_utilisateur
+                FROM emprunts e
+                JOIN livres l ON e.id_livre = l.id
+                JOIN utilisateurs u ON e.id_utilisateur = u.id
+                WHERE e.id_utilisateur = ?
+                ORDER BY e.id DESC
+            """, (id_utilisateur,))
+        else:
+            cur.execute("""
+                SELECT e.id, l.titre, u.nom, u.postnom, u.prenom, e.date_emprunt, e.date_retour, e.amende, e.id_utilisateur
+                FROM emprunts e
+                JOIN livres l ON e.id_livre = l.id
+                JOIN utilisateurs u ON e.id_utilisateur = u.id
+                ORDER BY e.id DESC
+            """)
         rows = cur.fetchall()
         conn.close()
         return rows
 
     @classmethod
-    def retourner_livre(cls, id_emprunt):
+    def retourner_livre(cls, id_emprunt, id_utilisateur_connecte=None, role_utilisateur=None):
         conn = DatabaseManager.connecter()
         cur = conn.cursor()
+        
         cur.execute("""
-            SELECT id_livre, date_emprunt FROM emprunts
+            SELECT id_livre, date_emprunt, id_utilisateur FROM emprunts
             WHERE id = ? AND date_retour IS NULL
         """, (id_emprunt,))
         emprunt = cur.fetchone()
+        
         if not emprunt:
             conn.close()
             raise MetierException("Emprunt introuvable ou déjà retourné.")
 
-        id_livre, date_emprunt_str = emprunt[0], emprunt[1]
+        id_livre, date_emprunt_str, id_proprietaire = emprunt[0], emprunt[1], emprunt[2]
+
+        if role_utilisateur == "emprunteur" and id_proprietaire != id_utilisateur_connecte:
+            conn.close()
+            raise MetierException("Vous n'êtes pas autorisé à retourner un livre qui ne vous appartient pas.")
+
         date_emp = datetime.strptime(date_emprunt_str, "%Y-%m-%d").date()
         jours = (date.today() - date_emp).days
         retard = max(0, jours - cls.DUREE_EMPRUNT)
@@ -556,8 +561,6 @@ class BibliothequeService:
             "en_cours": en_cours,
             "amendes": amendes
         }
-
-
 # =========================================================
 # APPLICATION STREAMLIT (INTERFACE UTILISATEUR)
 # =========================================================
@@ -567,7 +570,6 @@ def afficher_erreur(erreur):
 
 if "utilisateur" not in st.session_state:
     st.session_state.utilisateur = None
-
 
 # --- ACCÈS SANS SESSION (CONNEXION) ---
 if st.session_state.utilisateur is None:
@@ -595,14 +597,10 @@ if st.session_state.utilisateur is None:
             except BibliothequeException as e:
                 afficher_erreur(e)
 
-
 # --- ACCÈS AVEC SESSION (APPLICATION COMPLÈTE) ---
 else:
     user = st.session_state.utilisateur
 
-    # -----------------------------------------------------
-    # SIDEBAR
-    # -----------------------------------------------------
     st.sidebar.markdown("# 📚 Bibliothèque")
     st.sidebar.markdown(f"### 👤 {user.prenom} {user.nom}")
     st.sidebar.caption(f"Rôle : {user.role}")
@@ -626,9 +624,7 @@ else:
         st.session_state.utilisateur = None
         st.rerun()
 
-    # -----------------------------------------------------
-    # MENU : ACCUEIL
-    # -----------------------------------------------------
+    # --- MENU : ACCUEIL ---
     if menu == "🏠 Accueil":
         st.title("🏠 Tableau de bord")
         st.html(f"""
@@ -652,9 +648,7 @@ else:
         c7.metric("⏳ En cours", stats["en_cours"])
         c8.metric("💰 Amendes", f"{stats['amendes']:.0f} FC")
 
-    # -----------------------------------------------------
-    # MENU : LIVRES
-    # -----------------------------------------------------
+    # --- MENU : LIVRES ---
     elif menu == "📚 Livres":
         st.title("📚 Gestion des livres")
 
@@ -741,9 +735,7 @@ else:
                                 except BibliothequeException as e:
                                     afficher_erreur(e)
 
-    # -----------------------------------------------------
-    # MENU : CATÉGORIES
-    # -----------------------------------------------------
+    # --- MENU : CATÉGORIES ---
     elif menu == "🏷️ Catégories":
         st.title("🏷️ Gestion des catégories")
         tab1, tab2, tab3 = st.tabs(["Liste", "Ajouter", "Modifier / Supprimer"])
@@ -791,9 +783,7 @@ else:
                         except BibliothequeException as e:
                             afficher_erreur(e)
 
-    # -----------------------------------------------------
-    # MENU : EMPRUNTEURS
-    # -----------------------------------------------------
+    # --- MENU : EMPRUNTEURS ---
     elif menu == "👥 Emprunteurs":
         st.title("👥 Gestion des emprunteurs")
         tab1, tab2, tab3 = st.tabs(["Liste", "Ajouter", "Modifier / Supprimer"])
@@ -856,17 +846,19 @@ else:
                         except BibliothequeException as e:
                             afficher_erreur(e)
 
-    # -----------------------------------------------------
-    # MENU : EMPRUNTS
-    # -----------------------------------------------------
+    # --- MENU : EMPRUNTS ---
     elif menu == "📖 Emprunts":
         st.title("📖 Gestion des emprunts")
         tab1, tab2, tab3 = st.tabs(["Historique", "Nouvel emprunt", "Retour"])
 
         with tab1:
-            emprunts = BibliothequeService.obtenir_emprunts()
+            if user.role == "emprunteur":
+                emprunts = BibliothequeService.obtenir_emprunts(id_utilisateur=user.id)
+            else:
+                emprunts = BibliothequeService.obtenir_emprunts()
+
             if not emprunts:
-                st.info("Aucun emprunt.")
+                st.info("Aucun emprunt enregistré.")
             for emp in emprunts:
                 statut = "🟢 Retourné" if emp[6] else "🔴 En cours"
                 st.html(f"""
@@ -890,7 +882,7 @@ else:
 
                 if user.role == "emprunteur":
                     id_emp = user.id
-                    st.info("L'emprunt sera enregistré à votre nom.")
+                    st.info("L'emprunt sera directement enregistré à votre nom.")
                 else:
                     emprunteurs = BibliothequeService.obtenir_emprunteurs()
                     if emprunteurs:
@@ -905,33 +897,39 @@ else:
                     try:
                         if id_emp is None: raise ValidationException("Aucun emprunteur sélectionné.")
                         BibliothequeService.emprunter_livre(livres_dict[livre_sel], id_emp)
-                        st.success("✅ Emprunt enregistré.")
+                        st.success("✅ Emprunt enregistré avec succès.")
                         st.rerun()
                     except BibliothequeException as e:
                         afficher_erreur(e)
 
         with tab3:
-            emprunts_actifs = [e for e in BibliothequeService.obtenir_emprunts() if e[6] is None]
-            if not emprunts_actifs:
-                st.info("Aucun emprunt en cours.")
+            if user.role == "emprunteur":
+                emprunts_actifs = [e for e in BibliothequeService.obtenir_emprunts(id_utilisateur=user.id) if e[6] is None]
             else:
-                emp_actifs_dict = {f"{e[1]} — {e[2]} {e[3]}": e[0] for e in emprunts_actifs}
+                emprunts_actifs = [e for e in BibliothequeService.obtenir_emprunts() if e[6] is None]
+
+            if not emprunts_actifs:
+                st.info("Aucun emprunt en cours à retourner.")
+            else:
+                emp_actifs_dict = {f"{e[1]} — (Emprunté le {e[5]})": e[0] for e in emprunts_actifs}
                 selection = st.selectbox("📖 Emprunt à retourner", list(emp_actifs_dict.keys()), key="retour_emp_sel")
 
                 if st.button("🔄 Enregistrer le retour", use_container_width=True, key="bouton_retour_emp"):
                     try:
-                        amende = BibliothequeService.retourner_livre(emp_actifs_dict[selection])
+                        amende = BibliothequeService.retourner_livre(
+                            id_emprunt=emp_actifs_dict[selection],
+                            id_utilisateur_connecte=user.id,
+                            role_utilisateur=user.role
+                        )
                         if amende > 0:
-                            st.warning(f"⚠️ Retour enregistré. Amende : {amende:.0f} FC")
+                            st.warning(f"⚠️ Retour enregistré. Amende de retard : {amende:.0f} FC")
                         else:
                             st.success("✅ Retour enregistré sans amende.")
                         st.rerun()
                     except BibliothequeException as e:
                         afficher_erreur(e)
 
-    # -----------------------------------------------------
-    # MENU : STATISTIQUES
-    # -----------------------------------------------------
+    # --- MENU : STATISTIQUES ---
     elif menu == "📊 Statistiques":
         st.title("📊 Statistiques")
         stats = BibliothequeService.obtenir_statistiques()
@@ -949,9 +947,7 @@ else:
         c7.metric("⏳ En cours", stats["en_cours"])
         c8.metric("💰 Amendes", f"{stats['amendes']:.0f} FC")
 
-    # -----------------------------------------------------
-    # MENU : UTILISATEURS
-    # -----------------------------------------------------
+    # --- MENU : UTILISATEURS ---
     elif menu == "👤 Utilisateurs":
         st.title("👤 Gestion des utilisateurs")
         tab1, tab2, tab3 = st.tabs(["Liste", "Ajouter", "Modifier / Supprimer"])
