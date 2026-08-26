@@ -1405,11 +1405,13 @@ else:
     # =====================================================
 
     elif menu == "📚 Livres":
-             st.title("📚 Gestion des livres")
-             if role != "emprunteur":
-                tab1, tab2, tab3 = st.tabs(["Catalogue", "Ajouter", "Modifier / Supprimer"])
-             else:
-                tab1, = st.tabs(["Catalogue"])
+
+        st.title("📚 Gestion des livres")
+
+        if role != "emprunteur":
+            tab1, tab2, tab3 = st.tabs(["Catalogue", "Ajouter", "Modifier / Supprimer"])
+        else:
+            tab1, = st.tabs(["Catalogue"])
 
         # -------------------------------------------------
         # CATALOGUE
@@ -1421,270 +1423,167 @@ else:
                 key="recherche_livre"
             )
 
-            livres = obtenir_livres(
-                recherche
-            )
+            livres = obtenir_livres(recherche)
 
             if not livres:
-
-                st.info(
-                    "Aucun livre trouvé."
-                )
+                st.info("Aucun livre trouvé.")
 
             for livre in livres:
 
-                categorie = (
-                    livre[4]
-                    or "Non classée"
-                )
-
-                etat = (
-                    "🟢 Disponible"
-                    if livre[5]
-                    else "🔴 Emprunté"
-                )
+                categorie = livre[4] or "Non classée"
+                etat = "🟢 Disponible" if livre[5] else "🔴 Emprunté"
 
                 st.html(
                     f"""
                     <div class="card">
-
-                        <h3>
-                            📖 {livre[1]}
-                        </h3>
-
-                        <p>
-                            <b>Auteur :</b>
-                            {livre[2]}
-                        </p>
-
-                        <p>
-                            <b>Année :</b>
-                            {livre[3]}
-                        </p>
-
-                        <p>
-                            <b>Catégorie :</b>
-                            {categorie}
-                        </p>
-
-                        <p>
-                            <b>État :</b>
-                            {etat}
-                        </p>
-
+                        <h3>📖 {livre[1]}</h3>
+                        <p><b>Auteur :</b> {livre[2]}</p>
+                        <p><b>Année :</b> {livre[3]}</p>
+                        <p><b>Catégorie :</b> {categorie}</p>
+                        <p><b>État :</b> {etat}</p>
                     </div>
                     """
                 )
 
-
         # -------------------------------------------------
-        # AJOUTER LIVRE
+        # AJOUTER & MODIFIER (Uniquement pour Admin / Biblio)
         # -------------------------------------------------
+        if role != "emprunteur":
 
-        with tab2:
+            with tab2:
 
-            st.subheader(
-                "➕ Ajouter un livre"
-            )
+                st.subheader("➕ Ajouter un livre")
 
-            titre = st.text_input(
-                "Titre",
-                key="ajout_livre_titre"
-            )
-
-            auteur = st.text_input(
-                "Auteur",
-                key="ajout_livre_auteur"
-            )
-
-            annee = st.number_input(
-                "Année",
-                min_value=1000,
-                max_value=2100,
-                value=2026,
-                key="ajout_livre_annee"
-            )
-
-            categories = obtenir_categories()
-
-            if not categories:
-
-                st.warning(
-                    "Créez d'abord une catégorie."
-                )
-
-            else:
-
-                categories_dict = {
-                    c[1]: c[0]
-                    for c in categories
-                }
-
-                categorie = st.selectbox(
-                    "Catégorie",
-                    list(categories_dict.keys()),
-                    key="ajout_livre_categorie"
-                )
-
-                if st.button(
-                    "➕ Ajouter le livre",
-                    use_container_width=True,
-                    key="bouton_ajout_livre"
-                ):
-
-                    try:
-
-                        ajouter_livre(
-                            titre,
-                            auteur,
-                            annee,
-                            categories_dict[categorie]
-                        )
-
-                        st.success(
-                            "✅ Livre ajouté."
-                        )
-
-                        st.rerun()
-
-                    except Exception as erreur:
-
-                        afficher_erreur(
-                            erreur
-                        )
-
-
-        # -------------------------------------------------
-        # MODIFIER LIVRE
-        # -------------------------------------------------
-
-        with tab3:
-
-            livres = obtenir_livres()
-
-            if livres:
-
-                livres_dict = {
-                    f"{l[1]} — {l[2]}": l
-                    for l in livres
-                }
-
-                selection = st.selectbox(
-                    "📖 Livre",
-                    list(livres_dict.keys()),
-                    key="selection_livre_modification"
-                )
-
-                livre = livres_dict[
-                    selection
-                ]
-
-                titre = st.text_input(
-                    "Titre",
-                    value=livre[1],
-                    key="modification_livre_titre"
-                )
-
-                auteur = st.text_input(
-                    "Auteur",
-                    value=livre[2],
-                    key="modification_livre_auteur"
-                )
-
+                titre = st.text_input("Titre", key="ajout_livre_titre")
+                auteur = st.text_input("Auteur", key="ajout_livre_auteur")
                 annee = st.number_input(
                     "Année",
                     min_value=1000,
                     max_value=2100,
-                    value=livre[3],
-                    key="modification_livre_annee"
+                    value=2026,
+                    key="ajout_livre_annee"
                 )
 
                 categories = obtenir_categories()
 
-                if categories:
-
-                    categories_dict = {
-                        c[1]: c[0]
-                        for c in categories
-                    }
-
-                    noms_categories = list(
-                        categories_dict.keys()
-                    )
-
-                    index = 0
-
-                    if livre[4] in noms_categories:
-
-                        index = noms_categories.index(
-                            livre[4]
-                        )
-
+                if not categories:
+                    st.warning("Créez d'abord une catégorie.")
+                else:
+                    categories_dict = {c[1]: c[0] for c in categories}
                     categorie = st.selectbox(
                         "Catégorie",
-                        noms_categories,
-                        index=index,
-                        key="modification_livre_categorie"
+                        list(categories_dict.keys()),
+                        key="ajout_livre_categorie"
                     )
 
-                    c1, c2 = st.columns(2)
+                    if st.button(
+                        "➕ Ajouter le livre",
+                        use_container_width=True,
+                        key="bouton_ajout_livre"
+                    ):
+                        try:
+                            ajouter_livre(
+                                titre,
+                                auteur,
+                                annee,
+                                categories_dict[categorie]
+                            )
+                            st.success("✅ Livre ajouté.")
+                            st.rerun()
+                        except Exception as erreur:
+                            afficher_erreur(erreur)
 
-                    with c1:
+            with tab3:
 
-                        if st.button(
-                            "💾 Modifier",
-                            use_container_width=True,
-                            key="bouton_modification_livre"
-                        ):
+                livres = obtenir_livres()
 
-                            try:
+                if livres:
 
-                                modifier_livre(
-                                    livre[0],
-                                    titre,
-                                    auteur,
-                                    annee,
-                                    categories_dict[categorie]
-                                )
+                    livres_dict = {f"{l[1]} — {l[2]}": l for l in livres}
 
-                                st.success(
-                                    "✅ Livre modifié."
-                                )
+                    selection = st.selectbox(
+                        "📖 Livre",
+                        list(livres_dict.keys()),
+                        key="selection_livre_modification"
+                    )
 
-                                st.rerun()
+                    livre = livres_dict[selection]
 
-                            except Exception as erreur:
+                    titre = st.text_input(
+                        "Titre",
+                        value=livre[1],
+                        key="modification_livre_titre"
+                    )
 
-                                afficher_erreur(
-                                    erreur
-                                )
+                    auteur = st.text_input(
+                        "Auteur",
+                        value=livre[2],
+                        key="modification_livre_auteur"
+                    )
 
-                    with c2:
+                    annee = st.number_input(
+                        "Année",
+                        min_value=1000,
+                        max_value=2100,
+                        value=livre[3],
+                        key="modification_livre_annee"
+                    )
 
-                        if st.button(
-                            "🗑️ Supprimer",
-                            use_container_width=True,
-                            key="bouton_suppression_livre"
-                        ):
+                    categories = obtenir_categories()
 
-                            try:
+                    if categories:
 
-                                supprimer_livre(
-                                    livre[0]
-                                )
+                        categories_dict = {c[1]: c[0] for c in categories}
+                        noms_categories = list(categories_dict.keys())
+                        index = 0
 
-                                st.success(
-                                    "✅ Livre supprimé."
-                                )
+                        if livre[4] in noms_categories:
+                            index = noms_categories.index(livre[4])
 
-                                st.rerun()
+                        categorie = st.selectbox(
+                            "Catégorie",
+                            noms_categories,
+                            index=index,
+                            key="modification_livre_categorie"
+                        )
 
-                            except Exception as erreur:
+                        c1, c2 = st.columns(2)
 
-                                afficher_erreur(
-                                    erreur
-                                )
+                        with c1:
+                            if st.button(
+                                "💾 Modifier",
+                                use_container_width=True,
+                                key="bouton_modification_livre"
+                            ):
+                                try:
+                                    modifier_livre(
+                                        livre[0],
+                                        titre,
+                                        auteur,
+                                        annee,
+                                        categories_dict[categorie]
+                                    )
+                                    st.success("✅ Livre modifié.")
+                                    st.rerun()
+                                except Exception as erreur:
+                                    afficher_erreur(erreur)
 
+                        with c2:
+                            if st.button(
+                                "🗑️ Supprimer",
+                                use_container_width=True,
+                                key="bouton_suppression_livre"
+                            ):
+                                try:
+                                    supprimer_livre(livre[0])
+                                    st.success("✅ Livre supprimé.")
+                                    st.rerun()
+                                except Exception as erreur:
+                                    afficher_erreur(erreur)
+                                    
+                            
+                
+                    
 
     # =====================================================
     # CATÉGORIES
