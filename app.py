@@ -1404,7 +1404,7 @@ else:
     # LIVRES
     # =====================================================
 
-        elif menu == "📚 Livres":
+    elif menu == "📚 Livres":
              st.title("📚 Gestion des livres")
              if role != "emprunteur":
                 tab1, tab2, tab3 = st.tabs(["Catalogue", "Ajouter", "Modifier / Supprimer"])
