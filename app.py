@@ -1406,13 +1406,13 @@ else:
 
     elif menu == "📚 Livres":
 
-    st.title(
-        "📚 Gestion des livres"
-    )
+        st.title(
+           "📚 Gestion des livres"
+        )
 
-    tab1 = st.tabs(
-        ["Catalogue"]
-    )[0]
+        tab1 = st.tabs(
+          ["Catalogue"]
+       )[0]
 
     if role != "emprunteur":
 
