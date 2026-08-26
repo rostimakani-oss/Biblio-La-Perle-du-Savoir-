@@ -588,4 +588,415 @@ if st.session_state.utilisateur is None:
             try:
                 user = BibliothequeService.connecter_utilisateur(email, mot_de_passe)
                 if user is None:
-                    st.error("❌ E-mail ou mot de p
+                    st.error("❌ E-mail ou mot de passe incorrect.")
+                else:
+                    st.session_state.utilisateur = user
+                    st.rerun()
+            except BibliothequeException as e:
+                afficher_erreur(e)
+
+
+# --- ACCÈS AVEC SESSION (APPLICATION COMPLÈTE) ---
+else:
+    user = st.session_state.utilisateur
+
+    # -----------------------------------------------------
+    # SIDEBAR
+    # -----------------------------------------------------
+    st.sidebar.markdown("# 📚 Bibliothèque")
+    st.sidebar.markdown(f"### 👤 {user.prenom} {user.nom}")
+    st.sidebar.caption(f"Rôle : {user.role}")
+    st.sidebar.divider()
+
+    menus = [
+        ("🏠 Accueil", "accueil"),
+        ("📚 Livres", "livres"),
+        ("🏷️ Catégories", "categories"),
+        ("👥 Emprunteurs", "emprunteurs"),
+        ("📖 Emprunts", "emprunts"),
+        ("📊 Statistiques", "statistiques"),
+        ("👤 Utilisateurs", "utilisateurs")
+    ]
+
+    menus_autorises = [m[0] for m in menus if BibliothequeService.a_droit(user.role, m[1])]
+    menu = st.sidebar.radio("🧭 Navigation", menus_autorises, key="navigation_principale")
+
+    st.sidebar.divider()
+    if st.sidebar.button("🚪 Déconnexion", use_container_width=True, key="bouton_deconnexion"):
+        st.session_state.utilisateur = None
+        st.rerun()
+
+    # -----------------------------------------------------
+    # MENU : ACCUEIL
+    # -----------------------------------------------------
+    if menu == "🏠 Accueil":
+        st.title("🏠 Tableau de bord")
+        st.html(f"""
+        <div class="hero">
+            <h2>Bienvenue, {user.prenom} 👋</h2>
+            <p>Voici le tableau de bord de votre bibliothèque.</p>
+        </div>
+        """)
+
+        stats = BibliothequeService.obtenir_statistiques()
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("📚 Livres", stats["livres"])
+        c2.metric("🟢 Disponibles", stats["disponibles"])
+        c3.metric("🔴 Empruntés", stats["empruntes"])
+        c4.metric("👥 Emprunteurs", stats["emprunteurs"])
+
+        st.write("")
+        c5, c6, c7, c8 = st.columns(4)
+        c5.metric("🏷️ Catégories", stats["categories"])
+        c6.metric("📖 Emprunts", stats["emprunts"])
+        c7.metric("⏳ En cours", stats["en_cours"])
+        c8.metric("💰 Amendes", f"{stats['amendes']:.0f} FC")
+
+    # -----------------------------------------------------
+    # MENU : LIVRES
+    # -----------------------------------------------------
+    elif menu == "📚 Livres":
+        st.title("📚 Gestion des livres")
+
+        if user.role == "emprunteur":
+            tab1, = st.tabs(["Catalogue"])
+        else:
+            tab1, tab2, tab3 = st.tabs(["Catalogue", "Ajouter", "Modifier / Supprimer"])
+
+        with tab1:
+            recherche = st.text_input("🔎 Rechercher un titre ou un auteur", key="recherche_livre")
+            livres = BibliothequeService.obtenir_livres(recherche)
+
+            if not livres:
+                st.info("Aucun livre trouvé.")
+            for livre in livres:
+                etat = "🟢 Disponible" if livre.disponible else "🔴 Emprunté"
+                annee_str = str(livre.annee) if livre.annee is not None else "Non renseignée"
+                st.html(f"""
+                <div class="card">
+                    <h3>📖 {livre.titre}</h3>
+                    <p><b>Auteur :</b> {livre.auteur}</p>
+                    <p><b>Année :</b> {annee_str}</p>
+                    <p><b>Catégorie :</b> {livre.nom_categorie or 'Non classée'}</p>
+                    <p><b>État :</b> {etat}</p>
+                </div>
+                """)
+
+        if user.role != "emprunteur":
+            with tab2:
+                st.subheader("➕ Ajouter un livre")
+                titre = st.text_input("Titre", key="ajout_livre_titre")
+                auteur = st.text_input("Auteur", key="ajout_livre_auteur")
+                annee = st.number_input("Année", min_value=1000, max_value=2100, value=2026, key="ajout_livre_annee")
+                categories = BibliothequeService.obtenir_categories()
+
+                if not categories:
+                    st.warning("Créez d'abord une catégorie.")
+                else:
+                    cats_dict = {c.nom: c.id for c in categories}
+                    categorie_sel = st.selectbox("Catégorie", list(cats_dict.keys()), key="ajout_livre_categorie")
+
+                    if st.button("➕ Ajouter le livre", use_container_width=True, key="bouton_ajout_livre"):
+                        try:
+                            BibliothequeService.ajouter_livre(titre, auteur, annee, cats_dict[categorie_sel])
+                            st.success("✅ Livre ajouté.")
+                            st.rerun()
+                        except BibliothequeException as e:
+                            afficher_erreur(e)
+
+            with tab3:
+                livres = BibliothequeService.obtenir_livres()
+                if livres:
+                    livres_dict = {f"{l.titre} — {l.auteur}": l for l in livres}
+                    selection = st.selectbox("📖 Livre", list(livres_dict.keys()), key="selection_livre_mod")
+                    livre_sel = livres_dict[selection]
+
+                    titre = st.text_input("Titre", value=livre_sel.titre, key="mod_livre_titre")
+                    auteur = st.text_input("Auteur", value=livre_sel.auteur, key="mod_livre_auteur")
+                    annee_valeur = livre_sel.annee if livre_sel.annee is not None else 2026
+                    annee = st.number_input("Année", min_value=1000, max_value=2100, value=annee_valeur, key="mod_livre_annee")
+                    categories = BibliothequeService.obtenir_categories()
+
+                    if categories:
+                        cats_dict = {c.nom: c.id for c in categories}
+                        noms_cats = list(cats_dict.keys())
+                        index = noms_cats.index(livre_sel.nom_categorie) if livre_sel.nom_categorie in noms_cats else 0
+                        cat_sel = st.selectbox("Catégorie", noms_cats, index=index, key="mod_livre_cat")
+
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.button("💾 Modifier", use_container_width=True, key="bouton_mod_livre"):
+                                try:
+                                    BibliothequeService.modifier_livre(livre_sel.id, titre, auteur, annee, cats_dict[cat_sel])
+                                    st.success("✅ Livre modifié.")
+                                    st.rerun()
+                                except BibliothequeException as e:
+                                    afficher_erreur(e)
+                        with c2:
+                            if st.button("🗑️ Supprimer", use_container_width=True, key="bouton_sup_livre"):
+                                try:
+                                    BibliothequeService.supprimer_livre(livre_sel.id)
+                                    st.success("✅ Livre supprimé.")
+                                    st.rerun()
+                                except BibliothequeException as e:
+                                    afficher_erreur(e)
+
+    # -----------------------------------------------------
+    # MENU : CATÉGORIES
+    # -----------------------------------------------------
+    elif menu == "🏷️ Catégories":
+        st.title("🏷️ Gestion des catégories")
+        tab1, tab2, tab3 = st.tabs(["Liste", "Ajouter", "Modifier / Supprimer"])
+
+        with tab1:
+            categories = BibliothequeService.obtenir_categories()
+            if not categories:
+                st.info("Aucune catégorie.")
+            for cat in categories:
+                st.markdown(f'<div class="card">🏷️ <b>{cat.nom}</b></div>', unsafe_allow_html=True)
+
+        with tab2:
+            nom_cat = st.text_input("Nom de la catégorie", key="ajout_cat_nom")
+            if st.button("➕ Ajouter", use_container_width=True, key="bouton_ajout_cat"):
+                try:
+                    BibliothequeService.ajouter_categorie(nom_cat)
+                    st.success("✅ Catégorie ajoutée.")
+                    st.rerun()
+                except BibliothequeException as e:
+                    afficher_erreur(e)
+
+        with tab3:
+            categories = BibliothequeService.obtenir_categories()
+            if categories:
+                cats_dict = {c.nom: c for c in categories}
+                selection = st.selectbox("Catégorie", list(cats_dict.keys()), key="selection_cat_mod")
+                cat_sel = cats_dict[selection]
+
+                nouveau_nom = st.text_input("Nouveau nom", value=cat_sel.nom, key="mod_cat_nom")
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("💾 Modifier", use_container_width=True, key="bouton_mod_cat"):
+                        try:
+                            BibliothequeService.modifier_categorie(cat_sel.id, nouveau_nom)
+                            st.success("✅ Catégorie modifiée.")
+                            st.rerun()
+                        except BibliothequeException as e:
+                            afficher_erreur(e)
+                with c2:
+                    if st.button("🗑️ Supprimer", use_container_width=True, key="bouton_sup_cat"):
+                        try:
+                            BibliothequeService.supprimer_categorie(cat_sel.id)
+                            st.success("✅ Catégorie supprimée.")
+                            st.rerun()
+                        except BibliothequeException as e:
+                            afficher_erreur(e)
+
+    # -----------------------------------------------------
+    # MENU : EMPRUNTEURS
+    # -----------------------------------------------------
+    elif menu == "👥 Emprunteurs":
+        st.title("👥 Gestion des emprunteurs")
+        tab1, tab2, tab3 = st.tabs(["Liste", "Ajouter", "Modifier / Supprimer"])
+
+        with tab1:
+            recherche = st.text_input("🔎 Rechercher", key="recherche_emp")
+            emprunteurs = BibliothequeService.obtenir_emprunteurs(recherche)
+            if not emprunteurs:
+                st.info("Aucun emprunteur.")
+            for emp in emprunteurs:
+                st.html(f"""
+                <div class="card">
+                    <h3>👤 {emp.nom} {emp.postnom} {emp.prenom}</h3>
+                    <p>📧 {emp.email}</p>
+                </div>
+                """)
+
+        with tab2:
+            nom = st.text_input("Nom", key="ajout_emp_nom")
+            postnom = st.text_input("Postnom", key="ajout_emp_postnom")
+            prenom = st.text_input("Prénom", key="ajout_emp_prenom")
+            email = st.text_input("E-mail", key="ajout_emp_email")
+            pwd = st.text_input("Mot de passe", type="password", key="ajout_emp_pwd")
+
+            if st.button("➕ Ajouter l'emprunteur", use_container_width=True, key="bouton_ajout_emp"):
+                try:
+                    BibliothequeService.ajouter_utilisateur(nom, postnom, prenom, email, pwd, "emprunteur")
+                    st.success("✅ Emprunteur ajouté.")
+                    st.rerun()
+                except BibliothequeException as e:
+                    afficher_erreur(e)
+
+        with tab3:
+            emprunteurs = BibliothequeService.obtenir_emprunteurs()
+            if emprunteurs:
+                emp_dict = {f"{e.nom} {e.postnom} {e.prenom}": e for e in emprunteurs}
+                selection = st.selectbox("Emprunteur", list(emp_dict.keys()), key="selection_emp_mod")
+                emp_sel = emp_dict[selection]
+
+                nom = st.text_input("Nom", value=emp_sel.nom, key="mod_emp_nom")
+                postnom = st.text_input("Postnom", value=emp_sel.postnom, key="mod_emp_postnom")
+                prenom = st.text_input("Prénom", value=emp_sel.prenom, key="mod_emp_prenom")
+                email = st.text_input("E-mail", value=emp_sel.email, key="mod_emp_email")
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("💾 Modifier", use_container_width=True, key="bouton_mod_emp"):
+                        try:
+                            BibliothequeService.modifier_utilisateur(emp_sel.id, nom, postnom, prenom, email, "emprunteur")
+                            st.success("✅ Emprunteur modifié.")
+                            st.rerun()
+                        except BibliothequeException as e:
+                            afficher_erreur(e)
+                with c2:
+                    if st.button("🗑️ Supprimer", use_container_width=True, key="bouton_sup_emp"):
+                        try:
+                            BibliothequeService.supprimer_utilisateur(emp_sel.id)
+                            st.success("✅ Emprunteur supprimé.")
+                            st.rerun()
+                        except BibliothequeException as e:
+                            afficher_erreur(e)
+
+    # -----------------------------------------------------
+    # MENU : EMPRUNTS
+    # -----------------------------------------------------
+    elif menu == "📖 Emprunts":
+        st.title("📖 Gestion des emprunts")
+        tab1, tab2, tab3 = st.tabs(["Historique", "Nouvel emprunt", "Retour"])
+
+        with tab1:
+            emprunts = BibliothequeService.obtenir_emprunts()
+            if not emprunts:
+                st.info("Aucun emprunt.")
+            for emp in emprunts:
+                statut = "🟢 Retourné" if emp[6] else "🔴 En cours"
+                st.html(f"""
+                <div class="card">
+                    <h3>📖 {emp[1]}</h3>
+                    <p>👤 {emp[2]} {emp[3]} {emp[4]}</p>
+                    <p>📅 Emprunt : {emp[5]}</p>
+                    <p>🔄 Retour : {emp[6] or 'En cours'}</p>
+                    <p>{statut}</p>
+                    <p>💰 Amende : {emp[7]:.0f} FC</p>
+                </div>
+                """)
+
+        with tab2:
+            livres_dispo = [l for l in BibliothequeService.obtenir_livres() if l.disponible]
+            if not livres_dispo:
+                st.warning("Aucun livre disponible.")
+            else:
+                livres_dict = {f"{l.titre} — {l.auteur}": l.id for l in livres_dispo}
+                livre_sel = st.selectbox("📚 Livre", list(livres_dict.keys()), key="emprunt_livre_sel")
+
+                if user.role == "emprunteur":
+                    id_emp = user.id
+                    st.info("L'emprunt sera enregistré à votre nom.")
+                else:
+                    emprunteurs = BibliothequeService.obtenir_emprunteurs()
+                    if emprunteurs:
+                        emp_dict = {f"{e.nom} {e.postnom} {e.prenom}": e.id for e in emprunteurs}
+                        emp_sel = st.selectbox("👤 Emprunteur", list(emp_dict.keys()), key="emprunt_emp_sel")
+                        id_emp = emp_dict[emp_sel]
+                    else:
+                        id_emp = None
+                        st.warning("Aucun emprunteur enregistré.")
+
+                if st.button("📖 Enregistrer l'emprunt", use_container_width=True, key="bouton_ajout_emprunt"):
+                    try:
+                        if id_emp is None: raise ValidationException("Aucun emprunteur sélectionné.")
+                        BibliothequeService.emprunter_livre(livres_dict[livre_sel], id_emp)
+                        st.success("✅ Emprunt enregistré.")
+                        st.rerun()
+                    except BibliothequeException as e:
+                        afficher_erreur(e)
+
+        with tab3:
+            emprunts_actifs = [e for e in BibliothequeService.obtenir_emprunts() if e[6] is None]
+            if not emprunts_actifs:
+                st.info("Aucun emprunt en cours.")
+            else:
+                emp_actifs_dict = {f"{e[1]} — {e[2]} {e[3]}": e[0] for e in emprunts_actifs}
+                selection = st.selectbox("📖 Emprunt à retourner", list(emp_actifs_dict.keys()), key="retour_emp_sel")
+
+                if st.button("🔄 Enregistrer le retour", use_container_width=True, key="bouton_retour_emp"):
+                    try:
+                        amende = BibliothequeService.retourner_livre(emp_actifs_dict[selection])
+                        if amende > 0:
+                            st.warning(f"⚠️ Retour enregistré. Amende : {amende:.0f} FC")
+                        else:
+                            st.success("✅ Retour enregistré sans amende.")
+                        st.rerun()
+                    except BibliothequeException as e:
+                        afficher_erreur(e)
+
+    # -----------------------------------------------------
+    # MENU : STATISTIQUES
+    # -----------------------------------------------------
+    elif menu == "📊 Statistiques":
+        st.title("📊 Statistiques")
+        stats = BibliothequeService.obtenir_statistiques()
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("📚 Livres", stats["livres"])
+        c2.metric("🟢 Disponibles", stats["disponibles"])
+        c3.metric("🔴 Empruntés", stats["empruntes"])
+        c4.metric("👥 Emprunteurs", stats["emprunteurs"])
+
+        st.write("")
+        c5, c6, c7, c8 = st.columns(4)
+        c5.metric("🏷️ Catégories", stats["categories"])
+        c6.metric("📖 Emprunts", stats["emprunts"])
+        c7.metric("⏳ En cours", stats["en_cours"])
+        c8.metric("💰 Amendes", f"{stats['amendes']:.0f} FC")
+
+    # -----------------------------------------------------
+    # MENU : UTILISATEURS
+    # -----------------------------------------------------
+    elif menu == "👤 Utilisateurs":
+        st.title("👤 Gestion des utilisateurs")
+        tab1, tab2, tab3 = st.tabs(["Liste", "Ajouter", "Modifier / Supprimer"])
+
+        with tab1:
+            utilisateurs = BibliothequeService.obtenir_utilisateurs()
+            if not utilisateurs:
+                st.info("Aucun utilisateur.")
+            for u in utilisateurs:
+                icone = {"administrateur": "👑", "bibliothecaire": "📚", "emprunteur": "👤"}.get(u.role, "👤")
+                st.html(f"""
+                <div class="card">
+                    <h3>{icone} {u.nom} {u.postnom} {u.prenom}</h3>
+                    <p>📧 {u.email}</p>
+                    <p>🔐 Rôle : {u.role}</p>
+                </div>
+                """)
+
+        with tab2:
+            nom = st.text_input("Nom", key="ajout_user_nom")
+            postnom = st.text_input("Postnom", key="ajout_user_postnom")
+            prenom = st.text_input("Prénom", key="ajout_user_prenom")
+            email = st.text_input("E-mail", key="ajout_user_email")
+            pwd = st.text_input("Mot de passe", type="password", key="ajout_user_pwd")
+            role_sel = st.selectbox("Rôle", list(BibliothequeService.ROLES.keys()), key="ajout_user_role")
+
+            if st.button("➕ Créer l'utilisateur", use_container_width=True, key="bouton_ajout_user"):
+                try:
+                    BibliothequeService.ajouter_utilisateur(nom, postnom, prenom, email, pwd, role_sel)
+                    st.success("✅ Utilisateur créé.")
+                    st.rerun()
+                except BibliothequeException as e:
+                    afficher_erreur(e)
+
+        with tab3:
+            utilisateurs = BibliothequeService.obtenir_utilisateurs()
+            if utilisateurs:
+                users_dict = {f"{u.nom} {u.postnom} {u.prenom} — {u.role}": u for u in utilisateurs}
+                selection = st.selectbox("Utilisateur", list(users_dict.keys()), key="selection_user_mod")
+                user_sel = users_dict[selection]
+
+                nom = st.text_input("Nom", value=user_sel.nom, key="mod_user_nom")
+                postnom = st.text_input("Postnom", value=user_sel.postnom, key="mod_user_postnom")
+                prenom = st.text_input("Prénom", value=user_sel.prenom, key="mod_user_prenom")
+                email = st.text_input("E-mail", value=user_sel.email, key="mod_user_email")
+                roles_list = list(BibliothequeService.ROLES.keys())
+                idx_role = roles_list.index(user_sel.role) if user_sel.role in roles_list else 0
+                role_sel = st.selectbox("Rôle", roles_list, index=
