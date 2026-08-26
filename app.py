@@ -6,6 +6,298 @@ import re
 from datetime import date, datetime
 
 
+
+# ============================================================
+# PROGRAMMATION ORIENTÉE OBJET
+# ============================================================
+
+from abc import ABC, abstractmethod
+
+
+class Utilisateur(ABC):
+    """
+    Classe abstraite représentant un utilisateur de la bibliothèque.
+    """
+
+    def __init__(self, identifiant, nom, email, role):
+        self.__identifiant = identifiant
+        self.__nom = nom
+        self.__email = email
+        self.__role = role
+
+    # -------------------------
+    # Accesseurs (getters)
+    # -------------------------
+
+    @property
+    def identifiant(self):
+        return self.__identifiant
+
+    @property
+    def nom(self):
+        return self.__nom
+
+    @property
+    def email(self):
+        return self.__email
+
+    @property
+    def role(self):
+        return self.__role
+
+    # -------------------------
+    # Mutateurs (setters)
+    # -------------------------
+
+    @nom.setter
+    def nom(self, nouvelle_valeur):
+        self.__nom = nouvelle_valeur
+
+    @email.setter
+    def email(self, nouvelle_valeur):
+        self.__email = nouvelle_valeur
+
+    # -------------------------
+    # Polymorphisme
+    # -------------------------
+
+    @abstractmethod
+    def afficher_permissions(self):
+        """
+        Chaque type d'utilisateur définit ses propres permissions.
+        """
+        pass
+
+    def __str__(self):
+        return f"{self.__nom} ({self.__role})"
+
+
+class Administrateur(Utilisateur):
+    """
+    Représente un administrateur de la bibliothèque.
+    """
+
+    def afficher_permissions(self):
+        return [
+            "gérer les livres",
+            "gérer les catégories",
+            "gérer les emprunteurs",
+            "gérer les emprunts",
+            "consulter le tableau de bord"
+        ]
+
+
+class Bibliothecaire(Utilisateur):
+    """
+    Représente un bibliothécaire.
+    """
+
+    def afficher_permissions(self):
+        return [
+            "ajouter un livre",
+            "modifier un livre",
+            "enregistrer un emprunt",
+            "enregistrer un retour",
+            "consulter les livres"
+        ]
+
+
+class Emprunteur(Utilisateur):
+    """
+    Représente un emprunteur.
+    """
+
+    def afficher_permissions(self):
+        return [
+            "consulter les livres",
+            "consulter ses emprunts"
+        ]
+
+
+class Livre:
+    """
+    Représente un livre de la bibliothèque.
+    """
+
+    def __init__(
+        self,
+        identifiant,
+        titre,
+        auteur,
+        categorie_id=None,
+        disponible=True
+    ):
+        self.__identifiant = identifiant
+        self.__titre = titre
+        self.__auteur = auteur
+        self.__categorie_id = categorie_id
+        self.__disponible = disponible
+
+    @property
+    def identifiant(self):
+        return self.__identifiant
+
+    @property
+    def titre(self):
+        return self.__titre
+
+    @property
+    def auteur(self):
+        return self.__auteur
+
+    @property
+    def categorie_id(self):
+        return self.__categorie_id
+
+    @property
+    def disponible(self):
+        return self.__disponible
+
+    @disponible.setter
+    def disponible(self, valeur):
+        self.__disponible = valeur
+
+    def rendre_disponible(self):
+        self.__disponible = True
+
+    def rendre_indisponible(self):
+        self.__disponible = False
+
+    def __str__(self):
+        etat = "Disponible" if self.__disponible else "Emprunté"
+        return f"{self.__titre} - {self.__auteur} ({etat})"
+
+
+class Categorie:
+    """
+    Représente une catégorie de livres.
+    """
+
+    def __init__(self, identifiant, nom):
+        self.__identifiant = identifiant
+        self.__nom = nom
+
+    @property
+    def identifiant(self):
+        return self.__identifiant
+
+    @property
+    def nom(self):
+        return self.__nom
+
+    @nom.setter
+    def nom(self, nouvelle_valeur):
+        self.__nom = nouvelle_valeur
+
+    def __str__(self):
+        return self.__nom
+
+
+class Emprunt:
+    """
+    Représente un emprunt effectué dans la bibliothèque.
+    """
+
+    def __init__(
+        self,
+        identifiant,
+        livre,
+        emprunteur,
+        date_emprunt,
+        date_retour=None,
+        statut="En cours"
+    ):
+        self.__identifiant = identifiant
+        self.__livre = livre
+        self.__emprunteur = emprunteur
+        self.__date_emprunt = date_emprunt
+        self.__date_retour = date_retour
+        self.__statut = statut
+
+    @property
+    def identifiant(self):
+        return self.__identifiant
+
+    @property
+    def livre(self):
+        return self.__livre
+
+    @property
+    def emprunteur(self):
+        return self.__emprunteur
+
+    @property
+    def date_emprunt(self):
+        return self.__date_emprunt
+
+    @property
+    def date_retour(self):
+        return self.__date_retour
+
+    @property
+    def statut(self):
+        return self.__statut
+
+    def retourner(self, date_retour):
+        self.__date_retour = date_retour
+        self.__statut = "Retourné"
+        self.__livre.rendre_disponible()
+
+    def est_en_cours(self):
+        return self.__statut == "En cours"
+
+    def __str__(self):
+        return (
+            f"Emprunt #{self.__identifiant} - "
+            f"{self.__livre.titre} - "
+            f"{self.__emprunteur.nom}"
+        )
+
+
+class BaseDeDonnees:
+    """
+    Classe responsable de la connexion à la base SQLite.
+    """
+
+    def __init__(self, chemin):
+        self.__chemin = chemin
+        self.__connexion = None
+
+    @property
+    def connexion(self):
+        return self.__connexion
+
+    def connecter(self):
+        self.__connexion = sqlite3.connect(self.__chemin)
+        self.__connexion.row_factory = sqlite3.Row
+        return self.__connexion
+
+    def fermer(self):
+        if self.__connexion is not None:
+            self.__connexion.close()
+            self.__connexion = None
+
+    def executer(self, requete, parametres=()):
+        if self.__connexion is None:
+            self.connecter()
+
+        curseur = self.__connexion.cursor()
+        curseur.execute(requete, parametres)
+        self.__connexion.commit()
+
+        return curseur
+
+    def recuperer_tous(self, requete, parametres=()):
+        if self.__connexion is None:
+            self.connecter()
+
+        curseur = self.__connexion.cursor()
+        curseur.execute(requete, parametres)
+
+        return curseur.fetchall()
+
+
+
 # =========================================================
 # CONFIGURATION
 # =========================================================
