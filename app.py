@@ -999,4 +999,24 @@ else:
                 email = st.text_input("E-mail", value=user_sel.email, key="mod_user_email")
                 roles_list = list(BibliothequeService.ROLES.keys())
                 idx_role = roles_list.index(user_sel.role) if user_sel.role in roles_list else 0
-                role_sel = st.selectbox("Rôle", roles_list, index=
+                role_sel = st.selectbox("Rôle", roles_list, index=idx_role, key="mod_user_role")
+
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("💾 Modifier", use_container_width=True, key="bouton_mod_user"):
+                        try:
+                            BibliothequeService.modifier_utilisateur(user_sel.id, nom, postnom, prenom, email, role_sel)
+                            st.success("✅ Utilisateur modifié.")
+                            st.rerun()
+                        except BibliothequeException as e:
+                            afficher_erreur(e)
+                with c2:
+                    if st.button("🗑️ Supprimer", use_container_width=True, key="bouton_sup_user"):
+                        try:
+                            if user_sel.id == user.id:
+                                raise MetierException("Vous ne pouvez pas supprimer votre propre compte.")
+                            BibliothequeService.supprimer_utilisateur(user_sel.id)
+                            st.success("✅ Utilisateur supprimé.")
+                            st.rerun()
+                        except BibliothequeException as e:
+                            afficher_erreur(e)
