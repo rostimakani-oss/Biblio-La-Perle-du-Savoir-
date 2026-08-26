@@ -1404,29 +1404,16 @@ else:
     # LIVRES
     # =====================================================
 
-    elif menu == "📚 Livres":
-
-        st.title(
-           "📚 Gestion des livres"
-        )
-
-        tab1 = st.tabs(
-          ["Catalogue"]
-       )[0]
-
-    if role != "emprunteur":
-
-        tab2, tab3 = st.tabs(
-            [
-                "Ajouter",
-                "Modifier / Supprimer"
-            ]
-        )
+        elif menu == "📚 Livres":
+             st.title("📚 Gestion des livres")
+             if role != "emprunteur":
+                tab1, tab2, tab3 = st.tabs(["Catalogue", "Ajouter", "Modifier / Supprimer"])
+             else:
+                tab1, = st.tabs(["Catalogue"])
 
         # -------------------------------------------------
         # CATALOGUE
         # -------------------------------------------------
-
         with tab1:
 
             recherche = st.text_input(
@@ -1493,8 +1480,6 @@ else:
         # -------------------------------------------------
         # AJOUTER LIVRE
         # -------------------------------------------------
-
-    if role != "emprunteur":
 
         with tab2:
 
