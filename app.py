@@ -198,20 +198,14 @@ class Livre:
 # GESTIONNAIRE DE BASE DE DONNÉES ET SERVICES
 # =========================================================
 
-import os
-
 class DatabaseManager:
-    # Sauvegarde le fichier dans le dossier document/stockage du téléphone
-    @classmethod
-    def obtenir_chemin_db(cls):
-        dossier_base = os.path.expanduser("~") # Dossier utilisateur du téléphone
-        return os.path.join(dossier_base, "bibliotheque.db")
+    DB_NAME = "bibliotheque.db"
 
     @classmethod
     def connecter(cls):
-        chemin = cls.obtenir_chemin_db()
-        conn = sqlite3.connect(chemin, timeout=10)
-        conn.execute("PRAGMA journal_mode=WAL;") # Écrit immédiatement sur le stockage
+        # Utilise le fichier d'origine 'bibliotheque.db' tout en forçant l'écriture sur le disque
+        conn = sqlite3.connect(cls.DB_NAME, timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL;")
         return conn
 
     @classmethod
@@ -258,12 +252,22 @@ class DatabaseManager:
                 FOREIGN KEY(id_utilisateur) REFERENCES utilisateurs(id)
             );
         """)
+        
+        # Crée un administrateur de secours UNIQUEMENT si la base est vide
+        cur.execute("SELECT COUNT(*) FROM utilisateurs")
+        if cur.fetchone()[0] == 0:
+            mdp_hache = Utilisateur.hacher_mot_de_passe("admin123")
+            cur.execute("""
+                INSERT INTO utilisateurs (nom, postnom, prenom, email, mot_de_passe, role)
+                VALUES ('Admin', 'Systeme', 'Principal', 'admin@gmail.com', ?, 'administrateur')
+            """, (mdp_hache,))
+
         conn.commit()
         conn.close()
 
 DatabaseManager.init_db()
 
-              
+ 
 class BibliothequeService:
     DUREE_EMPRUNT = 14
     AMENDE_PAR_JOUR = 500
