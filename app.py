@@ -198,12 +198,21 @@ class Livre:
 # GESTIONNAIRE DE BASE DE DONNÉES ET SERVICES
 # =========================================================
 
+import os
+
 class DatabaseManager:
-    DB_NAME = "bibliotheque.db"
+    # Sauvegarde le fichier dans le dossier document/stockage du téléphone
+    @classmethod
+    def obtenir_chemin_db(cls):
+        dossier_base = os.path.expanduser("~") # Dossier utilisateur du téléphone
+        return os.path.join(dossier_base, "bibliotheque_data.db")
 
     @classmethod
     def connecter(cls):
-        return sqlite3.connect(cls.DB_NAME)
+        chemin = cls.obtenir_chemin_db()
+        conn = sqlite3.connect(chemin, timeout=10)
+        conn.execute("PRAGMA journal_mode=WAL;") # Écrit immédiatement sur le stockage
+        return conn
 
     @classmethod
     def init_db(cls):
@@ -254,6 +263,7 @@ class DatabaseManager:
 
 DatabaseManager.init_db()
 
+              
 class BibliothequeService:
     DUREE_EMPRUNT = 14
     AMENDE_PAR_JOUR = 500
