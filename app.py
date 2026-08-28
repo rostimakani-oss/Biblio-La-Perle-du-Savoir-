@@ -205,7 +205,7 @@ class DatabaseManager:
     @classmethod
     def obtenir_chemin_db(cls):
         dossier_base = os.path.expanduser("~") # Dossier utilisateur du téléphone
-        return os.path.join(dossier_base, "bibliotheque_data.db")
+        return os.path.join(dossier_base, "bibliotheque.db")
 
     @classmethod
     def connecter(cls):
